@@ -1,5 +1,7 @@
 import pandas as pd
 import random
+import itertools
+from copy import deepcopy
 
 # Lê o CSV
 df = pd.read_csv("jogadores.csv", sep=';')
@@ -7,25 +9,40 @@ df = pd.read_csv("jogadores.csv", sep=';')
 # Filtra só os que compareceram
 presentes = df[df['compareceu'] == 1].copy()
 
-# Embaralha os jogadores (sem seed fixa, muda a cada execução)
-presentes = presentes.sample(frac=1).reset_index(drop=True)
+# Verifica se temos exatamente 20 jogadores
+if len(presentes) != 20:
+    raise ValueError("Este script espera exatamente 20 jogadores presentes.")
 
-# Ordena por nota decrescente (melhor balanceamento)
-presentes = presentes.sort_values(by='nota', ascending=False).reset_index(drop=True)
+# Cria a lista de jogadores como tuplas (nome, nota)
+jogadores = list(zip(presentes['nome'], presentes['nota']))
 
-# Inicializa os times e controle de soma das notas
-times = {f"Time {i+1}": [] for i in range(4)}
-somas = {f"Time {i+1}": 0 for i in range(4)}
+# Número de simulações para buscar o melhor balanceamento
+NUM_SIMULACOES = 10000
+melhor_balanceamento = None
+melhor_desvio = float('inf')
 
-# Aloca cada jogador no time com menor soma atual
-for _, jogador in presentes.iterrows():
-    # Escolhe o time com menor soma total até agora
-    time_escolhido = min(somas, key=somas.get)
-    times[time_escolhido].append((jogador['nome'], jogador['nota']))
-    somas[time_escolhido] += jogador['nota']
+for _ in range(NUM_SIMULACOES):
+    random.shuffle(jogadores)
+    times = {f"Time {i+1}": [] for i in range(4)}
+    
+    # Distribui os jogadores (5 por time)
+    for i, jogador in enumerate(jogadores):
+        times[f"Time {(i % 4) + 1}"].append(jogador)
 
-# Exibe os resultados em uma linha por time
-for time, jogadores in times.items():
-    nomes_e_notas = [f"{nome} ({nota})" for nome, nota in jogadores]
-    media = sum(nota for _, nota in jogadores) / len(jogadores)
+    # Calcula médias e desvio padrão das médias
+    medias = [sum(nota for _, nota in jogadores) / 5 for jogadores in times.values()]
+    desvio = max(medias) - min(medias)
+
+    # Verifica se essa distribuição é melhor
+    if desvio < melhor_desvio:
+        melhor_desvio = desvio
+        melhor_balanceamento = deepcopy(times)
+
+# Exibe o melhor resultado encontrado
+print("Melhor distribuição encontrada:\n")
+for time, jogadores in melhor_balanceamento.items():
+    # Ordena os jogadores do time por nota decrescente
+    jogadores_ordenados = sorted(jogadores, key=lambda x: x[1], reverse=True)
+    nomes_e_notas = [f"{nome} ({nota})" for nome, nota in jogadores_ordenados]
+    media = sum(nota for _, nota in jogadores_ordenados) / len(jogadores_ordenados)
     print(f"{time} | Média: {media:.2f} | Jogadores: {', '.join(nomes_e_notas)}")
